@@ -1,74 +1,100 @@
 import os
 import cv2
 
-DATA_DIR = "./data"
-if not os.path.exists(DATA_DIR):
-    os.makedirs(DATA_DIR)
+DATA_DIR = "./Data"
+DATASET_SIZE = 100
 
-dataset_size = 100
-cap = cv2.VideoCapture(0)
-class_name = ""
-waiting_for_input = True
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
+def setup_directory(data_dir):
+    """
+    Creates a directory for our data collection.
+    :param data_dir: The directory path.
+    """
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
 
-    # Get frame width dynamically
-    frame_height, frame_width, _ = frame.shape
-    font_scale = frame_width / 800  # Scale font relative to width
 
-    if waiting_for_input:
-        text = f"Please enter data classification: {class_name}"
-    else:
-        text = f'Class: {class_name}'
-
-    # Calculate text size and center it horizontally
-    (text_width, text_height), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_TRIPLEX, font_scale, 3)
-    text_x = max(10, (frame_width - text_width) // 2)  # Ensure it stays within bounds
-
-    cv2.putText(frame, text, (text_x, 50), cv2.FONT_HERSHEY_TRIPLEX, font_scale, (0, 0, 0), 3, cv2.LINE_AA)
-
+def display_text(frame, text, position=50, color=(0, 0, 0)):
+    """
+    Displays a text on the frame of the captured video.
+    :param frame: The frame of the video capture object.
+    :param text: The inserted text to be displayed on the screen.
+    :param position: The text position on the y-axis of the frame.
+    :param color: The colour of the inserted text.
+    """
+    font_scale = frame.shape[1] / 800  # Scale font relative to width
+    text_size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_TRIPLEX, font_scale, 3)
+    text_x = max(10, (frame.shape[1] - text_size[0]) // 2)
+    cv2.putText(frame, text, (text_x, position), cv2.FONT_HERSHEY_TRIPLEX, font_scale, color, 3, cv2.LINE_AA)
     cv2.imshow('frame', frame)
-    cv2.resizeWindow('frame', frame_width, frame_height)  # Ensure window scales with frame size
-    key = cv2.waitKey(1) & 0xFF
 
-    if key == 27:  # Esc key
-        break
-    elif key == 13:  # Enter key
-        waiting_for_input = False
-    elif waiting_for_input and key == 8:  # Backspace key
-        class_name = class_name[:-1]
-    elif waiting_for_input and key != 255:
-        class_name += chr(key)
 
-    if not waiting_for_input:
-        class_dir = os.path.join(DATA_DIR, str(class_name))
-        if not os.path.exists(class_dir):
-            os.makedirs(class_dir)
+def get_class_name(cap):
+    """
+    Gets the class name we want to add to our dataset.
+    :param cap: The video capture object.
+    :return: The new class' name.
+    """
+    class_name = ''
 
-        print('Collecting data for class {}'.format(class_name))
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        display_text(frame, f"Please enter data classification: {class_name}")
 
-        done = False
-        while True:
-            ret, frame = cap.read()
-            cv2.putText(frame, 'Ready? Press "Q" ! :)', (100, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 0), 3,
-                        cv2.LINE_AA)
-            cv2.imshow('frame', frame)
-            if cv2.waitKey(25) == ord('q'):
-                break
+        key = cv2.waitKey(1) & 0xFF
+        if key == 27:  # Esc key
+            return None
+        elif key == 13:  # Enter key
+            if class_name == '':
+                continue
+            return class_name
+        elif key == 8:  # Backspace key
+            class_name = class_name[:-1]
+        elif key != 255:
+            class_name += chr(key)
 
-        counter = 0
-        while counter < dataset_size:
-            ret, frame = cap.read()
-            cv2.imshow('frame', frame)
-            cv2.waitKey(25)
-            cv2.imwrite(os.path.join(class_dir, '{}.jpg'.format(counter)), frame)
-            counter += 1
-        waiting_for_input = True
-        class_name = ""
-        key = ""
 
-cap.release()
-cv2.destroyAllWindows()
+def capture_class(cap, class_name, data_dir=DATA_DIR, dataset_size=DATASET_SIZE):
+    """
+    Captures images from the video capture object and saves them in the specified directory.
+    :param cap: The video capture object.
+    :param class_name: The class name we want to add to our dataset.
+    :param data_dir: The directory for the data.
+    :param dataset_size: Amount of images to be captured into our dataset.
+    """
+    setup_directory(os.path.join(data_dir, str(class_name)))  # Create directory for the class
+
+    print('Collecting data for class {}'.format(class_name))
+
+    while True:  # Wait until target is ready
+        ret, frame = cap.read()
+        display_text(frame, 'Press "R" When Ready', 50)
+        if cv2.waitKey(25) == ord('r'):
+            break
+
+    for counter in range(dataset_size):  # Capture the images to the dataset
+        ret, frame = cap.read()
+        cv2.imshow('frame', frame)
+        cv2.waitKey(25)
+        cv2.imwrite(os.path.join(data_dir, str(class_name), '{}.jpg'.format(counter)), frame)
+
+
+def collect_data(capture_device=0, data_dir=DATA_DIR, dataset_size=DATASET_SIZE):
+    """
+    Creates a dataset of images for specified classes taken from the given capture device.
+    :param capture_device: The capture device's integer.
+    :param data_dir: The directory path to store the dataset
+    :param dataset_size: The amount of images to be taken for each class in the dataset.
+    """
+    setup_directory(DATA_DIR)
+    cap = cv2.VideoCapture(capture_device)
+    while True:
+        class_name = get_class_name(cap)
+        if class_name is None:
+            break
+        capture_class(cap, class_name, data_dir, dataset_size)
+
+    cap.release()
+    cv2.destroyAllWindows()
