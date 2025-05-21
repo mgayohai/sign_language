@@ -98,3 +98,4 @@ def collect_data(capture_device=0, data_dir=DATA_DIR, dataset_size=DATASET_SIZE)
 
     cap.release()
     cv2.destroyAllWindows()
+
